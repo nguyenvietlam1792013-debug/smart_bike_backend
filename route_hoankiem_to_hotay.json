@@ -1,0 +1,11 @@
+{
+    "simulation_metadata": {
+        "start_location": "Hồ Hoàn Kiếm (21.0285, 105.8542)",
+        "end_location": "Hồ Tây (21.0480, 105.8360)",
+        "speed_kmh": 60.0,
+        "total_distance_meters": 0.0,
+        "simulated_duration_sec": 0.0,
+        "simulated_duration_min": 0.0
+    },
+    "turn_by_turn_instructions": []
+}

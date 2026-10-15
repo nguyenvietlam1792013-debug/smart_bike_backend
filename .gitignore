@@ -1,0 +1,8 @@
+vietnam-latest.osm.pbf
+*.osrm*
+vietnam-latest.osm.pbf
+*.osrm*
+.venv/
+frames/
+__pycache__/
+.idea/

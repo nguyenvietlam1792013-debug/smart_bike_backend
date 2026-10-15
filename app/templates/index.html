@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Bike Navigation & Simulator Dashboard</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; background: #121212; color: #ffffff; }
+        .main-layout { display: flex; gap: 20px; max-width: 1200px; margin: 0 auto; }
+        .container { flex: 2; background: #1e1e1e; padding: 25px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+        .preview-panel { flex: 1; background: #1e1e1e; padding: 25px; border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; }
+
+        h2, h3 { margin-top: 0; color: #0066FF; }
+
+        .search-container { display: flex; gap: 10px; margin-bottom: 15px; position: relative; }
+        input[type="text"] { flex: 1; padding: 12px 16px; border: 1px solid #333; border-radius: 8px; background: #2a2a2a; color: #fff; font-size: 15px; outline: none; }
+        input[type="text"]:focus { border-color: #0066FF; }
+
+        .btn { padding: 12px 20px; background: #0066FF; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 14px; transition: 0.2s; }
+        .btn:hover { background: #0052cc; }
+        .btn-sim { background: #28a745; margin-left: 10px; }
+        .btn-sim:hover { background: #218838; }
+        .btn-stop { background: #dc3545; display: none; margin-left: 10px; }
+        .btn-stop:hover { background: #c82333; }
+
+        #map { height: 450px; width: 100%; border-radius: 8px; margin-top: 15px; border: 1px solid #333; background: #222; }
+        .info-box { background: #2a2a2a; padding: 15px; border-radius: 8px; margin-top: 15px; border-left: 4px solid #0066FF; font-size: 14px; line-height: 1.6; }
+
+        .suggestions { position: absolute; top: 50px; left: 0; right: 220px; background: #2a2a2a; border: 1px solid #444; border-radius: 8px; z-index: 1000; max-height: 200px; overflow-y: auto; display: none; }
+        .suggestion-item { padding: 10px 15px; cursor: pointer; border-bottom: 1px solid #333; }
+        .suggestion-item:hover { background: #0066FF; }
+
+        /* Màn hình xe đạp mô phỏng */
+        .display-frame { width: 280px; height: 280px; background: #000; border: 4px solid #444; border-radius: 16px; display: flex; align-items: center; justify-content: center; margin-top: 15px; box-shadow: 0 0 15px rgba(0,102,255,0.3); position: relative; overflow: hidden; }
+        .display-frame img { max-width: 100%; max-height: 100%; border-radius: 8px; object-fit: contain; }
+        .sim-speed { margin-top: 15px; font-size: 18px; font-weight: bold; color: #00ff66; }
+    </style>
+</head>
+<body>
+    <div class="main-layout">
+        <!-- Bảng điều khiển chính -->
+        <div class="container">
+            <h2>🚴 Smart Bike NavMap Dashboard</h2>
+            <p><b>Vị trí xuất phát:</b> 📍 ĐH Bách Khoa Hà Nội</p>
+
+            <div class="search-container">
+                <input type="text" id="placeInput" placeholder="Nhập địa điểm (Ví dụ: Hồ Tây, Nội Bài)..." oninput="searchPlaces()">
+                <button class="btn" onclick="startNavigation()">Dẫn Đường</button>
+                <button class="btn btn-sim" id="startSimBtn" onclick="toggleSimulation(true)">Mô phỏng 30km/h</button>
+                <button class="btn btn-stop" id="stopSimBtn" onclick="toggleSimulation(false)">Dừng</button>
+                <div id="suggestionsBox" class="suggestions"></div>
+            </div>
+
+            <div class="info-box" id="statusBox">Trạng thái: Nhập tên địa điểm hoặc click chọn điểm đến trên bản đồ...</div>
+            <div id="map"></div>
+        </div>
+
+        <!-- Panel Mô phỏng Màn hình Xe đạp -->
+        <div class="preview-panel">
+            <h3>🚲 Màn hình Xe Đạp (Live)</h3>
+            <div class="display-frame">
+                <img id="bikeScreen" src="" alt="Màn hình chỉ đường" style="display:none;">
+                <span id="noSignal" style="color: #888;">Chờ dữ liệu...</span>
+            </div>
+            <div class="sim-speed" id="speedDisplay">Tốc độ: 0 km/h</div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        const START_LAT = 21.0045;
+        const START_LON = 105.8433;
+
+        let currentLat = START_LAT;
+        let currentLon = START_LON;
+        let selectedDestLat = null;
+        let selectedDestLon = null;
+
+        let routeGeometry = [];
+        let routePolyline = null;
+        let bikeMarker = null;
+        let destMarker = null;
+
+        let simInterval = null;
+        let simIndex = 0;
+        let searchTimeout = null;
+
+        // 1. Khởi tạo Bản đồ Leaflet & Tự render lại khi load xong trang
+        const map = L.map('map').setView([START_LAT, START_LON], 14);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19
+        }).addTo(map);
+
+        setTimeout(() => {
+            map.invalidateSize();
+        }, 400);
+
+        bikeMarker = L.marker([START_LAT, START_LON]).addTo(map).bindPopup("🚴 Vị trí xe").openPopup();
+
+        map.on('click', function(e) {
+            setDestination(e.latlng.lat, e.latlng.lng, `Tọa độ chọn: ${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)}`);
+        });
+
+        // 2. Tra cứu địa điểm qua OpenStreetMap Nominatim
+        function searchPlaces() {
+            clearTimeout(searchTimeout);
+            const query = document.getElementById('placeInput').value.trim();
+            const box = document.getElementById('suggestionsBox');
+
+            if (query.length < 2) { box.style.display = 'none'; return; }
+
+            searchTimeout = setTimeout(async () => {
+                try {
+                    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=vn&limit=5`);
+                    const results = await res.json();
+                    box.innerHTML = '';
+                    if (results.length > 0) {
+                        box.style.display = 'block';
+
+                        // Mặc định gán tạm tọa độ kết quả đầu tiên phòng khi người dùng không click
+                        if (!selectedDestLat) {
+                            selectedDestLat = parseFloat(results[0].lat);
+                            selectedDestLon = parseFloat(results[0].lon);
+                        }
+
+                        results.forEach(item => {
+                            const div = document.createElement('div');
+                            div.className = 'suggestion-item';
+                            div.innerText = item.display_name;
+                            div.onclick = () => {
+                                document.getElementById('placeInput').value = item.display_name;
+                                box.style.display = 'none';
+                                setDestination(parseFloat(item.lat), parseFloat(item.lon), item.display_name);
+                            };
+                            box.appendChild(div);
+                        });
+                    } else { box.style.display = 'none'; }
+                } catch (e) { console.error(e); }
+            }, 300);
+        }
+
+        function setDestination(lat, lon, name) {
+            selectedDestLat = lat;
+            selectedDestLon = lon;
+            if (destMarker) map.removeLayer(destMarker);
+            destMarker = L.marker([lat, lon]).addTo(map).bindPopup(`🎯 ${name}`).openPopup();
+            document.getElementById('statusBox').innerHTML = `📍 <b>Đã chọn điểm đến:</b> ${name}<br>Bấm <b>"Dẫn Đường"</b> để tải đường đi.`;
+        }
+
+        // 3. Lấy đường đi từ OSRM, vẽ vạch Polyline màu xanh & cập nhật ảnh
+        async function startNavigation() {
+            const inputVal = document.getElementById('placeInput').value.trim();
+
+            // Tự động định vị nếu gõ tên mà chưa bấm gợi ý
+            if ((!selectedDestLat || !selectedDestLon) && inputVal.length > 0) {
+                document.getElementById('statusBox').innerHTML = "⏳ Đang tìm tọa độ...";
+                try {
+                    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(inputVal)}&countrycodes=vn&limit=1`);
+                    const results = await res.json();
+                    if (results.length > 0) {
+                        setDestination(parseFloat(results[0].lat), parseFloat(results[0].lon), results[0].display_name);
+                    } else {
+                        alert("Không tìm thấy địa điểm này!");
+                        return;
+                    }
+                } catch(e) {
+                    alert("Lỗi kết nối bộ tìm kiếm địa điểm!");
+                    return;
+                }
+            }
+
+            if (!selectedDestLat || !selectedDestLon) {
+                alert("Vui lòng chọn hoặc nhập tên địa điểm trước!");
+                return;
+            }
+
+            document.getElementById('statusBox').innerHTML = "⏳ Đang tính toán lộ trình OSRM...";
+
+            try {
+                const res = await fetch(`/api/v1/route?start_lat=${currentLat}&start_lon=${currentLon}&end_lat=${selectedDestLat}&end_lon=${selectedDestLon}`);
+                const data = await res.json();
+
+                if (data.total_distance_m) {
+                    const distKm = (data.total_distance_m / 1000).toFixed(2);
+                    const timeMin = Math.round(data.total_duration_s / 60);
+
+                    // Xử lý mảng tọa độ
+                    routeGeometry = [];
+                    if (data.geometry && data.geometry.coordinates) {
+                        routeGeometry = data.geometry.coordinates.map(coord => [coord[1], coord[0]]);
+                    } else if (data.waypoints) {
+                        routeGeometry = data.waypoints.map(wp => [wp.lat, wp.lon]);
+                    }
+
+                    if (routeGeometry.length === 0) {
+                        routeGeometry = [[currentLat, currentLon], [selectedDestLat, selectedDestLon]];
+                    }
+
+                    // Vẽ đường Polyline xanh dương lên map
+                    if (routePolyline) map.removeLayer(routePolyline);
+                    routePolyline = L.polyline(routeGeometry, { color: '#0066FF', weight: 6, opacity: 0.9 }).addTo(map);
+
+                    map.invalidateSize();
+                    map.fitBounds(routePolyline.getBounds());
+
+                    document.getElementById('statusBox').innerHTML =
+                        `✅ <b>Đã tính xong đường đi!</b><br>` +
+                        `📏 Quãng đường: <b>${distKm} km</b> | ⏱️ Thời gian: <b>${timeMin} phút</b><br>` +
+                        `➡️ Hướng tiếp theo: <b>${data.next_step ? data.next_step.instruction : "Đi thẳng"}</b>`;
+
+                    // Cập nhật ảnh màn hình xe
+                    updateBikeScreenPreview();
+                } else {
+                    document.getElementById('statusBox').innerHTML = "❌ Không tìm thấy tuyến đường!";
+                }
+            } catch (err) {
+                console.error(err);
+                document.getElementById('statusBox').innerHTML = "❌ Lỗi kết nối tới Server Backend!";
+            }
+        }
+
+        // 4. Cập nhật ảnh bản đồ màn hình xe đạp từ API
+        function updateBikeScreenPreview() {
+            if (!selectedDestLat || !selectedDestLon) return;
+
+            const imgUrl = `/api/v1/map/tile?lat=${currentLat}&lon=${currentLon}&dest_lat=${selectedDestLat}&dest_lon=${selectedDestLon}&zoom=16&t=${new Date().getTime()}`;
+            const imgEl = document.getElementById('bikeScreen');
+            const noSignalEl = document.getElementById('noSignal');
+
+            imgEl.onload = function() {
+                imgEl.style.display = 'block';
+                noSignalEl.style.display = 'none';
+            };
+
+            imgEl.onerror = function() {
+                console.error("Không tải được ảnh từ URL:", imgUrl);
+                noSignalEl.innerText = "⚠️ Lỗi tải ảnh bản đồ!";
+                noSignalEl.style.display = 'block';
+                imgEl.style.display = 'none';
+            };
+
+            imgEl.src = imgUrl;
+        }
+
+        // 5. Mô phỏng xe chạy tốc độ 30km/h
+        function toggleSimulation(enable) {
+            if (enable) {
+                if (!routeGeometry || routeGeometry.length === 0) {
+                    alert("Vui lòng bấm 'Dẫn Đường' để tạo tuyến đường trước khi chạy mô phỏng!");
+                    return;
+                }
+                simIndex = 0;
+                document.getElementById('startSimBtn').style.display = 'none';
+                document.getElementById('stopSimBtn').style.display = 'inline-block';
+                document.getElementById('speedDisplay').innerHTML = "Tốc độ: 🚴 30 km/h";
+
+                simInterval = setInterval(() => {
+                    if (simIndex < routeGeometry.length) {
+                        currentLat = routeGeometry[simIndex][0];
+                        currentLon = routeGeometry[simIndex][1];
+
+                        bikeMarker.setLatLng([currentLat, currentLon]);
+                        map.panTo([currentLat, currentLon]);
+
+                        updateBikeScreenPreview();
+
+                        simIndex += Math.max(1, Math.floor(routeGeometry.length / 40));
+                    } else {
+                        toggleSimulation(false);
+                        alert("🎉 Xe đạp đã tới điểm đến!");
+                    }
+                }, 1000);
+            } else {
+                clearInterval(simInterval);
+                document.getElementById('startSimBtn').style.display = 'inline-block';
+                document.getElementById('stopSimBtn').style.display = 'none';
+                document.getElementById('speedDisplay').innerHTML = "Tốc độ: 0 km/h";
+            }
+        }
+    </script>
+</body>
+</html>
