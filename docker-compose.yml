@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  # Dịch vụ định tuyến OSRM
+  osrm:
+    image: osrm/osrm-backend:latest
+    container_name: smart-bike-osrm
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    volumes:
+      # Mount thư mục chứa dữ liệu map .osrm vào container
+      - ./:/data:ro
+    command: osrm-routed --algorithm ch /data/vietnam-latest.osrm
+
+  # Dịch vụ Smart Bike Backend FastAPI
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: smart-bike-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - OSRM_BASE_URL=http://osrm:5000
+      - DEFAULT_ROUTING_PROFILE=driving
+      - TILE_CACHE_MAXSIZE=512
+    depends_on:
+      - osrm
