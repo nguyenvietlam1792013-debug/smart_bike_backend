@@ -17,11 +17,12 @@ router = APIRouter()
 
 @router.get("", response_model=RouteResponse, summary="Tính toán lộ trình chi tiết cho Web Dashboard & Simulator")
 async def get_route(
-    start_lat: float = Query(..., description="Vĩ độ bắt đầu (GPS hiện tại)"),
-    start_lon: float = Query(..., description="Kinh độ bắt đầu"),
-    end_lat: float = Query(..., description="Vĩ độ điểm đến"),
-    end_lon: float = Query(..., description="Kinh độ điểm đến"),
-    profile: Optional[str] = Query(None, description="Profile định tuyến OSRM: 'driving' hoặc 'biking'")
+    start_lat: float = Query(..., description="Vĩ độ bắt đầu (GPS hiện tại) / Start latitude"),
+    start_lon: float = Query(..., description="Kinh độ bắt đầu / Start longitude"),
+    end_lat: float = Query(..., description="Vĩ độ điểm đến / End latitude"),
+    end_lon: float = Query(..., description="Kinh độ điểm đến / End longitude"),
+    profile: Optional[str] = Query(None, description="Profile định tuyến OSRM: 'driving' hoặc 'biking'"),
+    lang: str = Query("vi", description="Ngôn ngữ câu chỉ dẫn: 'vi' (Tiếng Việt) hoặc 'en' (English)")
 ):
     try:
         return await get_route_from_osrm(
@@ -29,14 +30,16 @@ async def get_route(
             start_lon=start_lon,
             end_lat=end_lat,
             end_lon=end_lon,
-            profile=profile
+            profile=profile,
+            lang=lang
         )
     except OSRMNoRouteError:
+        msg = "No route found between points" if lang.lower().startswith("en") else "Không tìm thấy tuyến đường hợp lệ giữa hai vị trí này"
         return RouteResponse(
             status="error",
             total_distance_m=0.0,
             total_duration_s=0.0,
-            message="Không tìm thấy tuyến đường hợp lệ giữa hai vị trí này",
+            message=msg,
             next_step=None,
             all_steps=[]
         )
@@ -59,11 +62,12 @@ async def get_route(
 
 @router.get("/cyd", response_model=CYDRouteResponse, summary="Dữ liệu điều hướng JSON rút gọn (<200 bytes) cho ESP32 CYD")
 async def get_route_cyd(
-    start_lat: float = Query(..., description="Vĩ độ GPS hiện tại của xe đạp"),
-    start_lon: float = Query(..., description="Kinh độ GPS hiện tại của xe đạp"),
-    end_lat: float = Query(..., description="Vĩ độ điểm đích"),
-    end_lon: float = Query(..., description="Kinh độ điểm đích"),
-    profile: Optional[str] = Query(None, description="Profile OSRM tùy chọn")
+    start_lat: float = Query(..., description="Vĩ độ GPS hiện tại của xe đạp / Current GPS latitude"),
+    start_lon: float = Query(..., description="Kinh độ GPS hiện tại của xe đạp / Current GPS longitude"),
+    end_lat: float = Query(..., description="Vĩ độ điểm đích / Target destination latitude"),
+    end_lon: float = Query(..., description="Kinh độ điểm đích / Target destination longitude"),
+    profile: Optional[str] = Query(None, description="Profile OSRM tùy chọn / Optional routing profile"),
+    lang: str = Query("vi", description="Ngôn ngữ câu chỉ dẫn: 'vi' (Tiếng Việt) hoặc 'en' (English)")
 ):
     try:
         return await get_cyd_route_from_osrm(
@@ -71,19 +75,21 @@ async def get_route_cyd(
             start_lon=start_lon,
             end_lat=end_lat,
             end_lon=end_lon,
-            profile=profile
+            profile=profile,
+            lang=lang
         )
     except OSRMNoRouteError:
+        msg = "No route found" if lang.lower().startswith("en") else "Không tìm thấy đường"
         return CYDRouteResponse(
             status="no_route",
             icon_id=1,
             step_dist=0.0,
             step_name="",
-            step_instruction="Không tìm thấy đường",
+            step_instruction=msg,
             total_dist=0.0,
             total_time=0.0,
             next_icon_id=0,
-            message="Không tìm thấy tuyến đường"
+            message=msg
         )
     except OSRMConnectionError as e:
         raise HTTPException(

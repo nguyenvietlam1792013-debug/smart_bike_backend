@@ -89,33 +89,63 @@ def get_cyd_icon_id(m_type: str, m_modifier: str) -> int:
     return 1
 
 
-def format_instruction_vi(m_type: str, m_modifier: str, name: str) -> str:
-    """Tạo câu chỉ dẫn tiếng Việt ngắn gọn và chuẩn xác cho màn hình xe đạp"""
+def format_instruction(m_type: str, m_modifier: str, name: str, lang: str = "vi") -> str:
+    """Tạo câu chỉ dẫn song ngữ / Generate bilingual turn instructions (VI & EN)"""
     m_type = (m_type or "").lower()
     m_modifier = (m_modifier or "").lower()
-    road_name = f" vào {name}" if name and name.strip() and name != "Đường không tên" else ""
+    has_name = bool(name and name.strip() and name not in ["Đường không tên", "Unnamed Road"])
 
-    if m_type == "arrive":
-        return "Đã đến điểm đích"
-    if "uturn" in m_modifier:
-        return f"Quay đầu xe{road_name}"
-    if "sharp left" in m_modifier:
-        return f"Ngoặt gấp sang trái{road_name}"
-    if "sharp right" in m_modifier:
-        return f"Ngoặt gấp sang phải{road_name}"
-    if "slight left" in m_modifier:
-        return f"Chếch sang trái{road_name}"
-    if "slight right" in m_modifier:
-        return f"Chếch sang phải{road_name}"
-    if "left" in m_modifier:
-        return f"Rẽ trái{road_name}"
-    if "right" in m_modifier:
-        return f"Rẽ phải{road_name}"
-    if m_type in ["roundabout", "rotary"]:
-        return f"Vào bùng binh{road_name}"
-    if m_type == "depart":
-        return f"Xuất phát{road_name}"
-    return f"Đi thẳng{road_name}"
+    if lang.lower().startswith("en"):
+        road_name = f" onto {name}" if has_name else ""
+        if m_type == "arrive":
+            return "Arrived at destination"
+        if "uturn" in m_modifier:
+            return f"Make a U-turn{road_name}"
+        if "sharp left" in m_modifier:
+            return f"Turn sharp left{road_name}"
+        if "sharp right" in m_modifier:
+            return f"Turn sharp right{road_name}"
+        if "slight left" in m_modifier:
+            return f"Keep slight left{road_name}"
+        if "slight right" in m_modifier:
+            return f"Keep slight right{road_name}"
+        if "left" in m_modifier:
+            return f"Turn left{road_name}"
+        if "right" in m_modifier:
+            return f"Turn right{road_name}"
+        if m_type in ["roundabout", "rotary"]:
+            return f"Enter the roundabout{road_name}"
+        if m_type == "depart":
+            return f"Head out{road_name}"
+        return f"Continue straight{road_name}"
+    else:
+        road_name = f" vào {name}" if has_name else ""
+        if m_type == "arrive":
+            return "Đã đến điểm đích"
+        if "uturn" in m_modifier:
+            return f"Quay đầu xe{road_name}"
+        if "sharp left" in m_modifier:
+            return f"Ngoặt gấp sang trái{road_name}"
+        if "sharp right" in m_modifier:
+            return f"Ngoặt gấp sang phải{road_name}"
+        if "slight left" in m_modifier:
+            return f"Chếch sang trái{road_name}"
+        if "slight right" in m_modifier:
+            return f"Chếch sang phải{road_name}"
+        if "left" in m_modifier:
+            return f"Rẽ trái{road_name}"
+        if "right" in m_modifier:
+            return f"Rẽ phải{road_name}"
+        if m_type in ["roundabout", "rotary"]:
+            return f"Vào bùng binh{road_name}"
+        if m_type == "depart":
+            return f"Xuất phát{road_name}"
+        return f"Đi thẳng{road_name}"
+
+
+def format_instruction_vi(m_type: str, m_modifier: str, name: str) -> str:
+    """Tương thích ngược với mã cũ"""
+    return format_instruction(m_type, m_modifier, name, lang="vi")
 
 
 async def fetch_osrm_raw(
@@ -171,7 +201,8 @@ async def get_route_from_osrm(
     start_lon: float,
     end_lat: float,
     end_lon: float,
-    profile: Optional[str] = None
+    profile: Optional[str] = None,
+    lang: str = "vi"
 ) -> RouteResponse:
     """Lấy dữ liệu lộ trình đầy đủ (kèm GeoJSON geometry) cho Web Leaflet và Simulator"""
     data = await fetch_osrm_raw(
@@ -194,14 +225,15 @@ async def get_route_from_osrm(
     raw_steps = legs[0].get("steps", []) if legs else []
 
     parsed_steps: List[StepInstruction] = []
+    default_road_name = "Unnamed Road" if lang.lower().startswith("en") else "Đường không tên"
     for step in raw_steps:
         maneuver = step.get("maneuver", {})
         m_type = maneuver.get("type", "unknown")
         m_modifier = maneuver.get("modifier", "")
-        step_name = step.get("name") or "Đường không tên"
+        step_name = step.get("name") or default_road_name
 
         icon_id = get_cyd_icon_id(m_type, m_modifier)
-        instruction_text = format_instruction_vi(m_type, m_modifier, step_name)
+        instruction_text = format_instruction(m_type, m_modifier, step_name, lang=lang)
 
         parsed_steps.append(StepInstruction(
             instruction=instruction_text,
@@ -234,11 +266,13 @@ async def get_cyd_route_from_osrm(
     start_lon: float,
     end_lat: float,
     end_lon: float,
-    profile: Optional[str] = None
+    profile: Optional[str] = None,
+    lang: str = "vi"
 ) -> CYDRouteResponse:
     """
     Trích xuất dữ liệu điều hướng siêu gọn nhẹ (< 200 bytes) tối ưu riêng cho ESP32 CYD.
     Tắt overview=false để giảm thiểu tải CPU và băng thông mạng.
+    Hỗ trợ đa ngôn ngữ qua tham số lang ('vi' hoặc 'en').
     """
     data = await fetch_osrm_raw(
         start_lat=start_lat,
@@ -258,13 +292,15 @@ async def get_cyd_route_from_osrm(
     legs = route.get("legs", [])
     raw_steps = legs[0].get("steps", []) if legs else []
 
+    is_en = lang.lower().startswith("en")
+
     if not raw_steps:
         return CYDRouteResponse(
             status="success",
             icon_id=1,
             step_dist=0.0,
-            step_name="Đang tính toán",
-            step_instruction="Đi thẳng",
+            step_name="Calculating" if is_en else "Đang tính toán",
+            step_instruction="Continue straight" if is_en else "Đi thẳng",
             total_dist=total_dist,
             total_time=total_time,
             next_icon_id=0
@@ -277,7 +313,7 @@ async def get_cyd_route_from_osrm(
         maneuver = target_step.get("maneuver", {})
         m_type = maneuver.get("type", "turn")
         m_modifier = maneuver.get("modifier", "")
-        step_name = target_step.get("name") or "Đoạn tiếp theo"
+        step_name = target_step.get("name") or ("Next segment" if is_en else "Đoạn tiếp theo")
 
         # Khoảng cách đến khúc rẽ chính là quãng đường đi trên step hiện tại
         step_dist = round(curr_step.get("distance", 0.0), 1)
@@ -285,7 +321,7 @@ async def get_cyd_route_from_osrm(
             step_dist = round(target_step.get("distance", 0.0), 1)
 
         icon_id = get_cyd_icon_id(m_type, m_modifier)
-        step_instruction = format_instruction_vi(m_type, m_modifier, step_name)
+        step_instruction = format_instruction(m_type, m_modifier, step_name, lang=lang)
 
         # Tính toán trước icon của bước kế tiếp sau đó
         next_icon_id = 0
@@ -299,8 +335,8 @@ async def get_cyd_route_from_osrm(
         target_step = raw_steps[0]
         icon_id = 7
         step_dist = round(target_step.get("distance", 0.0), 1)
-        step_name = target_step.get("name") or "Điểm đến"
-        step_instruction = "Sắp đến điểm đích"
+        step_name = target_step.get("name") or ("Destination" if is_en else "Điểm đến")
+        step_instruction = "Approaching destination" if is_en else "Sắp đến điểm đích"
         next_icon_id = 7
 
     return CYDRouteResponse(

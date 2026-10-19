@@ -1,187 +1,191 @@
 # 🚴 Smart Bike Backend
 
+**English** • [Tiếng Việt](README.vn.md)
+
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688.svg?style=flat&logo=FastAPI&logoColor=white)](https://fastapi.tiangolo.com)
 [![Python](https://img.shields.io/badge/Python-3.11%20%7C%203.12%20%7C%203.14-blue.svg?style=flat&logo=python&logoColor=white)](https://www.python.org/)
 [![Docker](https://img.shields.io/badge/Docker-OSRM%20Container-2496ED.svg?style=flat&logo=docker&logoColor=white)](https://www.docker.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**Smart Bike Backend** là hệ thống máy chủ điều hướng theo thời gian thực (Turn-by-turn Navigation) và cung cấp dữ liệu telemetry cho thiết bị xe đạp thông minh chạy vi điều khiển **ESP32 CYD** (Cheap Yellow Display - màn hình màu 320x240).
+**Smart Bike Backend** is a high-performance, real-time turn-by-turn navigation and telemetry server tailored for smart bicycle computers powered by the **ESP32 CYD** (Cheap Yellow Display - 320x240 color TFT LCD).
 
-Hệ thống kết hợp sức mạnh của **FastAPI**, công cụ định tuyến mã nguồn mở **OSRM** (Open Source Routing Machine) và bản đồ **OpenStreetMap**, được thiết kế chuyên biệt để giải quyết bài toán giới hạn bộ nhớ RAM và băng thông truyền tải trên các thiết bị nhúng IoT.
-
----
-
-## 🌟 Tính Năng Nổi Bật
-
-* ⚡ **Endpoint JSON siêu gọn cho ESP32 (`/api/v1/route/cyd`)**:
-  * Gói tin phản hồi chỉ khoảng **~200 bytes** (giảm hơn 98% dung lượng so với GeoJSON đầy đủ).
-  * Vi điều khiển ESP32 giải mã bằng `ArduinoJson` trong **< 1ms**, tiết kiệm tối đa RAM vi điều khiển (SRAM 520KB).
-  * Cung cấp sẵn mã icon màn hình (`icon_id` 1–7), khoảng cách bước rẽ, câu chỉ dẫn tiếng Việt tự nhiên, tổng cự ly và icon kế tiếp.
-* 🗺️ **Render Map Tile siêu tốc với LRU In-Memory Cache**:
-  * Render trực tiếp ảnh bản đồ JPEG kích thước 320x240 hiển thị lên màn hình LCD TFT của xe đạp.
-  * Tích hợp bộ nhớ đệm **LRU Cache** trong RAM: giảm độ trễ phản hồi từ **1,200ms** xuống chỉ còn **< 3ms** (tăng tốc hơn 400 lần) và tránh bị OpenStreetMap giới hạn lượt truy vấn.
-  * Tự động ghép nối đa tile (**multi-tile stitching 2x2**) chống viền đen, giữ vị trí xe đạp luôn ở chính tâm màn hình và vẽ điểm đích.
-* 🚦 **Định tuyến tuân thủ luật giao thông**:
-  * Tích hợp OSRM chạy profile `driving` để đảm bảo xe đạp đi đúng chiều đường giao thông tại Việt Nam (tránh đi ngược chiều).
-* 🖥️ **Web Dashboard & Bộ Giả Lập Live (Leaflet.js)**:
-  * Giao diện trực quan tìm kiếm địa điểm qua Nominatim, vẽ đường Polyline màu xanh và mô phỏng xe đạp chuyển động ở tốc độ 30 km/h.
-* 🛡️ **Khả năng phục hồi & Chống sập**:
-  * HTTP Connection Pooling tự động tái tạo kết nối khi event loop thay đổi.
-  * Phân loại lỗi mạng, timeout và lỗi không tìm thấy đường (`NoRoute`) rõ ràng, không gây sập máy chủ.
+Built on top of **FastAPI**, **OSRM** (Open Source Routing Machine), and **OpenStreetMap**, this backend is specifically engineered to overcome the strict memory (SRAM 520KB) and bandwidth constraints of IoT microcontrollers while providing an interactive Leaflet.js web simulator for real-time tracking.
 
 ---
 
-## 🏗️ Kiến Trúc Hệ Thống
+## 🌟 Key Features
+
+* ⚡ **Ultra-compact JSON Endpoint for ESP32 (`/api/v1/route/cyd`)**:
+  * Response payload is trimmed down to **~200 bytes** (>98% size reduction compared to standard full GeoJSON routes).
+  * Deserializes in **< 1ms** using `ArduinoJson` on the ESP32 without memory fragmentation or heap exhaustion.
+  * Native bilingual support: pass `lang=en` (English) or `lang=vi` (Vietnamese).
+  * Includes LCD turn icon ID (`icon_id` 1–7), distance to next turn, human-friendly turn guidance, total remaining distance, and next maneuver preview.
+* 🗺️ **Blazing Fast Map Tile Generator with In-Memory LRU Cache**:
+  * Renders 320x240 JPEG map tiles on-the-fly for direct display on the bicycle TFT screen.
+  * Built-in **LRU Cache** in RAM: drops response latency from **1,200ms** (remote fetch) to **< 3ms** (>400x speedup), preventing OpenStreetMap tile rate limits.
+  * Continuous **2x2 multi-tile stitching** eliminates black border artifacts, perfectly centers the bicycle marker, and draws the destination point and heading line.
+* 🚦 **One-Way Street & Traffic Rule Compliance**:
+  * Utilizes OSRM with road navigation profiles to prevent bicycles from routing into reverse-traffic one-way roads.
+* 🖥️ **Live Web Dashboard & Route Simulator (Leaflet.js)**:
+  * Interactive web UI for Nominatim place searching, route polyline preview, and real-time 30 km/h bicycle ride simulation.
+* 🛡️ **Connection Resilience & Graceful Error Handling**:
+  * Persistent HTTP Connection Pooling with automatic event-loop recreation (resolves `Event loop is closed`).
+  * Structured handling for `NoRoute`, network disconnection, and invalid coordinate inputs.
+
+---
+
+## 🏗️ System Architecture
 
 ```mermaid
 graph TD
-    subgraph Clients["Thiết bị & Ứng dụng Khách"]
-        ESP32["🚴 Thiết bị ESP32 CYD<br/>(Màn hình 320x240)"]
-        Browser["💻 Web Dashboard Leaflet<br/>(Trình duyệt / Mobile)"]
+    subgraph Clients["Client Layer"]
+        ESP32["🚴 ESP32 CYD Device<br/>(320x240 TFT LCD)"]
+        Browser["💻 Web Dashboard Leaflet<br/>(Desktop / Mobile)"]
     end
 
     subgraph Backend["Smart Bike Backend (FastAPI)"]
         Router["API Routers<br/>(/route, /map, /cyd)"]
-        OSRMService["OSRM Service<br/>(Icon mapping, Text VN)"]
+        OSRMService["OSRM Service<br/>(Icon mapping, EN/VI text)"]
         MapService["Map Service<br/>(LRU Tile Cache & Multi-stitch)"]
     end
 
-    subgraph External["Dịch vụ Hạ tầng & Dữ liệu"]
+    subgraph External["External Infrastructure"]
         OSRM["Docker OSRM Engine<br/>(Port 5000 / vietnam.osrm)"]
         OSM["OpenStreetMap Tile Server<br/>(tile.openstreetmap.org)"]
     end
 
-    ESP32 -->|1. JSON rút gọn <200B| Router
-    ESP32 -->|2. Ảnh JPEG 320x240| Router
+    ESP32 -->|1. Compact JSON <200B| Router
+    ESP32 -->|2. JPEG Map Tile 320x240| Router
     Browser -->|3. GeoJSON full route| Router
     
     Router --> OSRMService
     Router --> MapService
     
     OSRMService -->|HTTP Keep-Alive| OSRM
-    MapService -->|Fetch tile nếu Cache Miss| OSM
+    MapService -->|Fetch tile on Cache Miss| OSM
 ```
 
 ---
 
-## 📁 Cấu Trúc Thư Mục
+## 📁 Project Structure
 
 ```text
 bike-backend/
 ├── app/
 │   ├── api/
-│   │   ├── map_router.py       # API render tile bản đồ (/api/v1/map)
-│   │   └── route_router.py     # API định tuyến & telemetry (/api/v1/route)
+│   │   ├── map_router.py       # Map tile render endpoints (/api/v1/map)
+│   │   └── route_router.py     # Routing & navigation endpoints (/api/v1/route)
 │   ├── core/
-│   │   └── config.py           # Cấu hình Pydantic BaseSettings
+│   │   └── config.py           # Pydantic BaseSettings centralized configuration
 │   ├── schemas/
 │   │   └── navigation.py       # Pydantic Schemas (RouteResponse, CYDRouteResponse)
 │   ├── services/
-│   │   ├── map_service.py      # Xử lý ảnh Pillow, LRU Cache, Multi-tile stitch
-│   │   └── osrm_service.py     # Gọi OSRM, map icon CYD, sinh câu tiếng Việt
+│   │   ├── map_service.py      # Pillow rendering, LRU Cache, multi-tile stitcher
+│   │   └── osrm_service.py     # OSRM client, CYD icon mapping, EN/VI instructions
 │   ├── templates/
-│   │   └── index.html          # Dashboard Leaflet.js mô phỏng xe đạp
+│   │   └── index.html          # Leaflet.js dashboard & bicycle simulator
 │   └── main.py                 # FastAPI Lifespan & Application entrypoint
 ├── scripts/
-│   ├── simulate_nav.py         # Giả lập lộ trình xuất file JSON & ảnh NavMap
-│   ├── simulate_nav_frames.py  # Giả lập frame-by-frame 1 fps
-│   └── test_nav_map.py         # Kịch bản kiểm tra tích hợp API
-├── .env.example                # File mẫu biến môi trường
-├── .gitignore                  # Cấu hình loại trừ Git toàn diện
-├── docker-compose.yml          # Khởi chạy OSRM + Backend nhanh chóng
-├── Dockerfile                  # Đóng gói ứng dụng backend
+│   ├── simulate_nav.py         # Route simulation & JSON/NavMap export
+│   ├── simulate_nav_frames.py  # 1-FPS frame-by-frame snapshot generator
+│   └── test_nav_map.py         # API integration test suite
+├── .env.example                # Bilingual environment variables template
+├── .gitignore                  # Comprehensive Git exclusion rules
+├── docker-compose.yml          # 1-command startup for OSRM + Backend
+├── Dockerfile                  # Container definition for backend
 ├── LICENSE                     # MIT License
-├── README.md                   # Tài liệu hướng dẫn dự án
-└── requirements.txt            # Danh sách gói phụ thuộc Python
+├── README.md                   # English Documentation (Primary)
+├── README.vn.md                # Vietnamese Documentation
+└── requirements.txt            # Minimal production Python dependencies
 ```
 
 ---
 
-## 🚀 Hướng Dẫn Cài Đặt & Khởi Chạy
+## 🚀 Quickstart Guide
 
-### 1. Chuẩn bị Dữ liệu Bản đồ OSRM (Việt Nam)
-Nếu bạn chưa có dữ liệu OSRM cho Việt Nam, tải file PBF và build OSRM bằng Docker:
+### 1. Prepare OSRM Map Data
+If you don't already have an extracted OSRM dataset, download the OSM PBF file and extract it via Docker:
 
 ```bash
-# Tải dữ liệu bản đồ Việt Nam từ Geofabrik
+# Download Vietnam map data from Geofabrik (or your desired region)
 wget https://download.geofabrik.de/asia/vietnam-latest.osm.pbf
 
-# Build dữ liệu OSRM với profile xe hơi/xe đạp
+# Extract and build OSRM graph
 docker run -t -v "${PWD}:/data" osrm/osrm-backend osrm-extract -p /opt/car.lua /data/vietnam-latest.osm.pbf
 docker run -t -v "${PWD}:/data" osrm/osrm-backend osrm-partition /data/vietnam-latest.osrm
 docker run -t -v "${PWD}:/data" osrm/osrm-backend osrm-customize /data/vietnam-latest.osrm
 ```
 
-### 2. Chạy với Docker Compose (Khuyên dùng)
-Chạy toàn bộ hệ thống (gồm cả OSRM container và FastAPI Backend) chỉ với một lệnh:
+### 2. Run with Docker Compose (Recommended)
+Launch both the OSRM container and the FastAPI Backend with a single command:
 
 ```bash
 docker compose up -d
 ```
 
-### 3. Chạy trực tiếp bằng Python Virtual Environment
+### 3. Run Locally with Python Virtual Environment
 
 ```bash
-# 1. Tạo và kích hoạt môi trường ảo
+# 1. Create and activate virtual environment
 python3 -m venv .venv
-source .venv/bin/activate  # Trên Linux/macOS
-# hoặc .venv\Scripts\activate trên Windows
+source .venv/bin/activate  # On Linux/macOS
+# or .venv\Scripts\activate on Windows
 
-# 2. Cài đặt các thư viện cần thiết
+# 2. Install dependencies
 pip install -r requirements.txt
 
-# 3. Tạo file cấu hình từ file mẫu
+# 3. Create .env from example template
 cp .env.example .env
 
-# 4. Chạy container OSRM ở cổng 5000 (nếu chưa chạy)
+# 4. Start OSRM engine on port 5000 (if not already running)
 docker run -d --name smart-bike-osrm -p 5000:5000 -v "${PWD}:/data" osrm/osrm-backend osrm-routed --algorithm ch /data/vietnam-latest.osrm
 
-# 5. Khởi chạy Backend FastAPI
+# 5. Start the FastAPI backend
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-Sau khi chạy, mở trình duyệt truy cập:
-* 🌐 **Dashboard mô phỏng**: `http://localhost:8000/`
-* 📑 **Tài liệu API Swagger**: `http://localhost:8000/docs`
+Once running, access:
+* 🌐 **Simulator Dashboard**: `http://localhost:8000/`
+* 📑 **Interactive Swagger Docs**: `http://localhost:8000/docs`
 
 ---
 
-## 📡 Danh Sách API Endpoints
+## 📡 API Reference
 
-| Phương thức | Đường dẫn API | Mục đích |
-| :--- | :--- | :--- |
-| `GET` | `/` | Web Dashboard Leaflet & mô phỏng xe đạp |
-| `GET` | `/api/v1/route/cyd` | **Chuyên dụng ESP32**: Trả JSON rút gọn (<200 bytes) |
-| `GET` | `/api/v1/route` | Lấy lộ trình đầy đủ kèm mảng tọa độ GeoJSON |
-| `GET` | `/api/v1/route/health` | Kiểm tra trạng thái sẵn sàng của OSRM Server |
-| `GET` | `/api/v1/map/tile` | Lấy ảnh bản đồ JPEG 320x240 (có LRU Cache) |
-| `GET` | `/api/v1/map/cache/stats` | Thống kê số lượng tile đang được lưu trong RAM |
+| Method | Endpoint | Key Parameters | Description |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/` | - | Interactive Leaflet web simulator |
+| `GET` | `/api/v1/route/cyd` | `start_lat`, `start_lon`, `end_lat`, `end_lon`, `lang=en\|vi` | **ESP32 Endpoint**: Compact JSON (<200 bytes) |
+| `GET` | `/api/v1/route` | `start_lat`, `start_lon`, `end_lat`, `end_lon`, `lang=en\|vi` | Full route data with GeoJSON geometry |
+| `GET` | `/api/v1/route/health` | - | Health check for backend and OSRM connectivity |
+| `GET` | `/api/v1/map/tile` | `lat`, `lon`, `dest_lat`, `dest_lon`, `zoom=16` | Rendered 320x240 JPEG tile with LRU caching |
+| `GET` | `/api/v1/map/cache/stats`| - | Real-time map tile memory cache statistics |
 
 ---
 
-## 📟 Tích Hợp Với ESP32 CYD
+## 📟 ESP32 CYD Hardware Integration
 
-### Bảng Mã `icon_id` Hiển Thị Màn Hình
+### Turn `icon_id` Reference Table
 
-| ID | Ý nghĩa | Icon gợi ý |
-| :---: | :--- | :---: |
-| **1** | Đi thẳng | ⬆️ |
-| **2** | Rẽ phải | ➡️ |
-| **3** | Rẽ trái | ⬅️ |
-| **4** | Ngoặt gấp phải | ↗️ |
-| **5** | Ngoặt gấp trái | ↖️ |
-| **6** | Quay đầu xe (U-turn) | ↩️ |
-| **7** | Đã đến điểm đích | 🏁 |
+| ID | English Meaning | Vietnamese Meaning | Suggested Icon |
+| :---: | :--- | :--- | :---: |
+| **1** | Continue straight | Đi thẳng | ⬆️ |
+| **2** | Turn right | Rẽ phải | ➡️ |
+| **3** | Turn left | Rẽ trái | ⬅️ |
+| **4** | Turn sharp right | Ngoặt gấp sang phải | ↗️ |
+| **5** | Turn sharp left | Ngoặt gấp sang trái | ↖️ |
+| **6** | Make a U-turn | Quay đầu xe | ↩️ |
+| **7** | Arrived at destination | Đã đến điểm đích | 🏁 |
 
-### Mẫu Dữ Liệu Trả Về từ `/api/v1/route/cyd`
+### Sample Response (`GET /api/v1/route/cyd?lang=en`)
 
 ```json
 {
   "status": "success",
   "icon_id": 2,
   "step_dist": 150.0,
-  "step_name": "Đường Thanh Niên",
-  "step_instruction": "Rẽ phải vào Đường Thanh Niên",
+  "step_name": "Thanh Nien Street",
+  "step_instruction": "Turn right onto Thanh Nien Street",
   "total_dist": 3450.0,
   "total_time": 420.0,
   "next_icon_id": 1,
@@ -189,35 +193,37 @@ Sau khi chạy, mở trình duyệt truy cập:
 }
 ```
 
-### Mã Nguồn C++ Mẫu (Arduino / ESP32)
+### Sample C++ Code (Arduino / ESP32)
 
 ```cpp
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 
-void updateNavigation(float currentLat, float currentLon, float destLat, float destLon) {
+void fetchNavigationTelemetry(float currentLat, float currentLon, float destLat, float destLon) {
     if (WiFi.status() != WL_CONNECTED) return;
 
     HTTPClient http;
+    // Request compact telemetry with English turn guidance
     String url = "http://192.168.1.100:8000/api/v1/route/cyd?start_lat=" + String(currentLat, 6) +
                  "&start_lon=" + String(currentLon, 6) +
                  "&end_lat=" + String(destLat, 6) +
-                 "&end_lon=" + String(destLon, 6);
+                 "&end_lon=" + String(destLon, 6) +
+                 "&lang=en";
 
     http.begin(url);
     int httpCode = http.GET();
 
     if (httpCode == 200) {
-        StaticJsonDocument<384> doc;
+        StaticJsonDocument<384> doc; // Minimal SRAM buffer
         DeserializationError error = deserializeJson(doc, http.getString());
         if (!error && doc["status"] == "success") {
-            int iconId = doc["icon_id"];
-            float stepDist = doc["step_dist"];
-            const char* instruction = doc["step_instruction"];
-            float totalDist = doc["total_dist"];
+            int iconId = doc["icon_id"];               // Maneuver icon ID (1-7)
+            float stepDist = doc["step_dist"];         // Distance to next turn (m)
+            const char* instruction = doc["step_instruction"]; // Guidance string
+            float totalDist = doc["total_dist"];       // Total remaining distance (m)
 
-            // Hiển thị lên màn hình TFT ESP32 CYD...
+            // Render to ESP32 CYD TFT LCD...
         }
     }
     http.end();
@@ -226,18 +232,18 @@ void updateNavigation(float currentLat, float currentLon, float destLat, float d
 
 ---
 
-## 🧪 Chạy Kiểm Thử & Giả Lập
+## 🧪 Testing & Simulation Scripts
 
 ```bash
-# Chạy script kiểm tra tích hợp API Route & Map Image:
+# Run route and map rendering integration tests:
 python scripts/test_nav_map.py
 
-# Chạy mô phỏng lộ trình Hồ Hoàn Kiếm -> Hồ Tây:
+# Run Hoan Kiem -> West Lake route simulation:
 python scripts/simulate_nav.py
 ```
 
 ---
 
-## 📄 Giấy Phép (License)
+## 📄 License
 
-Dự án được phân phối dưới giấy phép [MIT License](LICENSE). Bạn hoàn toàn có thể tự do sử dụng, chỉnh sửa và tích hợp vào các dự án cá nhân hoặc thương mại.
+This project is licensed under the [MIT License](LICENSE). You are free to use, modify, and distribute this software for personal or commercial projects.
