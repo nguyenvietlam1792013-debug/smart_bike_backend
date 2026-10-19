@@ -3,9 +3,154 @@
         "start_location": "Hồ Hoàn Kiếm (21.0285, 105.8542)",
         "end_location": "Hồ Tây (21.0480, 105.8360)",
         "speed_kmh": 60.0,
-        "total_distance_meters": 0.0,
-        "simulated_duration_sec": 0.0,
-        "simulated_duration_min": 0.0
+        "total_distance_meters": 3510.1,
+        "simulated_duration_sec": 210.6,
+        "simulated_duration_min": 3.51
     },
-    "turn_by_turn_instructions": []
+    "turn_by_turn_instructions": [
+        {
+            "instruction": "Rẽ trái",
+            "icon_id": 3,
+            "type": "depart",
+            "modifier": "left",
+            "distance": 31.2,
+            "name": "Đường không tên"
+        },
+        {
+            "instruction": "Rẽ phải",
+            "icon_id": 2,
+            "type": "turn",
+            "modifier": "right",
+            "distance": 9.7,
+            "name": "Đường không tên"
+        },
+        {
+            "instruction": "Rẽ phải vào Phố Đinh Tiên Hoàng",
+            "icon_id": 2,
+            "type": "turn",
+            "modifier": "right",
+            "distance": 183.5,
+            "name": "Phố Đinh Tiên Hoàng"
+        },
+        {
+            "instruction": "Chếch sang trái vào Phố Đinh Tiên Hoàng",
+            "icon_id": 3,
+            "type": "continue",
+            "modifier": "slight left",
+            "distance": 175.8,
+            "name": "Phố Đinh Tiên Hoàng"
+        },
+        {
+            "instruction": "Chếch sang phải vào Phố Đinh Tiên Hoàng",
+            "icon_id": 2,
+            "type": "fork",
+            "modifier": "slight right",
+            "distance": 177.5,
+            "name": "Phố Đinh Tiên Hoàng"
+        },
+        {
+            "instruction": "Rẽ phải vào Phố Lê Thái Tổ",
+            "icon_id": 2,
+            "type": "turn",
+            "modifier": "right",
+            "distance": 55.8,
+            "name": "Phố Lê Thái Tổ"
+        },
+        {
+            "instruction": "Đi thẳng vào Phố Hàng Đào",
+            "icon_id": 1,
+            "type": "new name",
+            "modifier": "straight",
+            "distance": 209.7,
+            "name": "Phố Hàng Đào"
+        },
+        {
+            "instruction": "Đi thẳng vào Phố Hàng Ngang",
+            "icon_id": 1,
+            "type": "new name",
+            "modifier": "straight",
+            "distance": 153.6,
+            "name": "Phố Hàng Ngang"
+        },
+        {
+            "instruction": "Đi thẳng vào Phố Hàng Đường",
+            "icon_id": 1,
+            "type": "new name",
+            "modifier": "straight",
+            "distance": 182.7,
+            "name": "Phố Hàng Đường"
+        },
+        {
+            "instruction": "Đi thẳng vào Phố Đồng Xuân",
+            "icon_id": 1,
+            "type": "new name",
+            "modifier": "straight",
+            "distance": 178.0,
+            "name": "Phố Đồng Xuân"
+        },
+        {
+            "instruction": "Đi thẳng vào Phố Hàng Giấy",
+            "icon_id": 1,
+            "type": "new name",
+            "modifier": "straight",
+            "distance": 219.5,
+            "name": "Phố Hàng Giấy"
+        },
+        {
+            "instruction": "Đi thẳng vào Phố Hàng Than",
+            "icon_id": 1,
+            "type": "new name",
+            "modifier": "straight",
+            "distance": 358.4,
+            "name": "Phố Hàng Than"
+        },
+        {
+            "instruction": "Chếch sang trái vào Phố Nguyễn Khắc Nhu",
+            "icon_id": 3,
+            "type": "turn",
+            "modifier": "slight left",
+            "distance": 476.9,
+            "name": "Phố Nguyễn Khắc Nhu"
+        },
+        {
+            "instruction": "Đi thẳng vào Phố Phó Đức Chính",
+            "icon_id": 1,
+            "type": "new name",
+            "modifier": "straight",
+            "distance": 688.1,
+            "name": "Phố Phó Đức Chính"
+        },
+        {
+            "instruction": "Rẽ trái vào Đường Thanh Niên",
+            "icon_id": 3,
+            "type": "end of road",
+            "modifier": "left",
+            "distance": 247.4,
+            "name": "Đường Thanh Niên"
+        },
+        {
+            "instruction": "Rẽ phải",
+            "icon_id": 2,
+            "type": "turn",
+            "modifier": "right",
+            "distance": 69.7,
+            "name": "Đường không tên"
+        },
+        {
+            "instruction": "Đi thẳng",
+            "icon_id": 1,
+            "type": "notification",
+            "modifier": "straight",
+            "distance": 92.5,
+            "name": "Đường không tên"
+        },
+        {
+            "instruction": "Đã đến điểm đích",
+            "icon_id": 7,
+            "type": "arrive",
+            "modifier": "right",
+            "distance": 0.0,
+            "name": "Đường không tên"
+        }
+    ]
 }

@@ -1,21 +1,22 @@
+from typing import Optional
 from fastapi import APIRouter, Query, Response
-from app.services.map_service import render_map_tile
+from app.services.map_service import render_map_tile, get_cache_stats
 
 router = APIRouter()
 
 
-@router.get("/tile")
-@router.get("/map_image")
+@router.get("/tile", summary="Lấy ảnh tile bản đồ (JPEG) cho màn hình xe đạp ESP32 CYD")
+@router.get("/map_image", summary="Alias lấy ảnh bản đồ (hỗ trợ backward compatibility)")
 async def get_map_tile(
-        lat: float = Query(...),
-        lon: float = Query(...),
-        end_lat: float = Query(None),
-        end_lon: float = Query(None),
-        dest_lat: float = Query(None),
-        dest_lon: float = Query(None),
-        zoom: int = Query(16),
-        width: int = Query(320),
-        height: int = Query(240)
+    lat: float = Query(..., description="Vĩ độ hiện tại của xe đạp"),
+    lon: float = Query(..., description="Kinh độ hiện tại của xe đạp"),
+    end_lat: Optional[float] = Query(None, description="Vĩ độ điểm đến"),
+    end_lon: Optional[float] = Query(None, description="Kinh độ điểm đến"),
+    dest_lat: Optional[float] = Query(None, description="Alias cho end_lat"),
+    dest_lon: Optional[float] = Query(None, description="Alias cho end_lon"),
+    zoom: int = Query(16, ge=1, le=19, description="Mức phóng to bản đồ (mặc định 16)"),
+    width: int = Query(320, ge=64, le=800, description="Chiều rộng khung ảnh (mặc định 320)"),
+    height: int = Query(240, ge=64, le=600, description="Chiều cao khung ảnh (mặc định 240)")
 ):
     target_end_lat = end_lat if end_lat is not None else dest_lat
     target_end_lon = end_lon if end_lon is not None else dest_lon
@@ -29,4 +30,17 @@ async def get_map_tile(
         width=width,
         height=height
     )
-    return Response(content=img_bytes, media_type="image/jpeg")
+
+    return Response(
+        content=img_bytes,
+        media_type="image/jpeg",
+        headers={
+            "Cache-Control": "public, max-age=60",
+            "Content-Disposition": "inline; filename=map_tile.jpg"
+        }
+    )
+
+
+@router.get("/cache/stats", summary="Thống kê trạng thái bộ nhớ đệm tile OSM")
+async def cache_stats():
+    return await get_cache_stats()
